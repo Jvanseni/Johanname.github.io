@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Space Shooter SPCK — Enhanced</title>
+<style>
+  body{margin:0;background:#000;font-family:system-ui,Segoe UI,Roboto;color:#fff;overflow:hidden}
+  canvas{display:block;margin:auto;background:#000}
+  #menu{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.85);flex-direction:column;gap:20px;color:#fff;
+  }
+  button{
+    background:#1d6fff;color:#fff;border:0;padding:12px 20px;font-size:18px;
+    border-radius:10px;font-weight:600;
+  }
+</style>
+</head>
+<body>
+<div id="menu">
+  <h1>🚀 SPACE SHOOTER</h1>
+  <button id="startBtn">Mulai Game</button>
+</div>
+<canvas id="game" width="480" height="680"></canvas>
+
+<script>
+// ======== AUDIO =========
+const sndShoot = new Audio("data:audio/wav;base64,UklGRuQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YdQAAACAgICAgP///4CAgICAgICAgICAgP///4CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgP///4CAgICAgICAgP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAAAA");
+const sndExplode = new Audio("data:audio/wav;base64,UklGRoQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZAAAACAgICAgICAgP8A/wD/AP8A/wD/AP8A//8A//8A//8A//8A/wD/AP8A/wD/AP8A/wD/AP8A/wD/AP8A/wD/AP8A/wD/AP8A/wD/AP8A//8A//8A//8A//8A//8AAA==");
+
+// Musik latar (loop)
+const music = new Audio("data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAgICAgICAgICAgP//AACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgP//AACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgP//AACAgICAgICAgICAgICA=");
+music.loop = true;
+
+// ======== SETUP =========
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+let W = cv.width, H = cv.height;
+
+let playing = false;
+let score = 0;
+let frame = 0;
+let gameOver = false;
+
+let ship = {x:W/2, y:H-80, w:40, h:40, speed:6, power:1};
+let bullets = [];
+let enemies = [];
+let powerups = [];
+
+// ======== FUNCTIONS =========
+function spawnEnemy(){ enemies.push({x: Math.random()* (W-40), y: -50, w:40, h:40, vy:2 + Math.random()*1.2, hp:1}); }
+
+function spawnPowerUp(){
+  powerups.push({x:Math.random()*(W-30), y:-40, w:30, h:30, vy:2, type:"double"});
+}
+
+function shoot(){
+  sndShoot.currentTime = 0; sndShoot.play();
+  if(ship.power===1){ bullets.push({x: ship.x, y: ship.y - 20, vy:-8, w:6, h:14}); }
+  if(ship.power===2){ bullets.push({x: ship.x-10, y:ship.y-20, vy:-8, w:6,h:14}); bullets.push({x:ship.x+10,y:ship.y-20,vy:-8,w:6,h:14}); }
+}
+
+function update(){
+  if(!playing || gameOver) return;
+  frame++;
+
+  // bullets
+  for(let b of bullets){ b.y += b.vy; }
+  bullets = bullets.filter(b => b.y > -30);
+
+  // enemies
+  if(frame % 40 === 0) spawnEnemy();
+  for(let e of enemies){ e.y += e.vy; }
+  enemies = enemies.filter(e => e.y < H+50);
+
+  // power-ups
+  if(frame % 400 === 0) spawnPowerUp();
+  for(let p of powerups){ p.y += p.vy; }
+  powerups = powerups.filter(p => p.y < H+50);
+
+  // collisions
+  for(let e of enemies){
+    for(let b of bullets){
+      if(hit(b,e)){
+        e.hp--; b.y = -999;
+        if(e.hp<=0){ score++; sndExplode.currentTime=0; sndExplode.play(); e.y = H+999; }
+      }
+    }
+    if(hit(e,ship)){ endGame(); }
+  }
+
+  // powerup collision
+  for(let p of powerups){ if(hit(p,ship)){ ship.power=2; p.y=H+999; setTimeout(()=>ship.power=1,8000); } }
+}
+
+function hit(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  // starfield
+  ctx.fillStyle = '#fff';
+  for(let i=0;i<60;i++){
+    ctx.fillRect((i*83 + frame*0.7)%W, (i*37 + frame*1.2)%H, 2,2);
+    ctx.fillRect((i*123 + frame*0.9)%W, (i*59 + frame*0.4)%H, 2,2);
+  }
+
+  // ship
+  ctx.fillStyle='#4af';
+  ctx.beginPath(); ctx.moveTo(ship.x,ship.y-20);
+  ctx.lineTo(ship.x-20, ship.y+20);
+  ctx.lineTo(ship.x+20, ship.y+20);
+  ctx.closePath(); ctx.fill();
+
+  // bullets
+  ctx.fillStyle='#ff4';
+  for(let b of bullets){ ctx.fillRect(b.x-3,b.y,b.w,b.h); }
+
+  // enemies
+  ctx.fillStyle='#f44';
+  for(let e of enemies){ ctx.fillRect(e.x,e.y,e.w,e.h); }
+
+  // powerups
+  ctx.fillStyle='#4f4';
+  for(let p of powerups){ ctx.fillRect(p.x,p.y,p.w,p.h); }
+
+  // score
+  ctx.fillStyle='#fff'; ctx.font='20px Arial'; ctx.fillText('Skor: '+score, 20,30);
+
+  if(gameOver){
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#fff'; ctx.font='32px Arial'; ctx.textAlign='center';
+    ctx.fillText('GAME OVER', W/2, H/2 - 10);
+    ctx.font='20px Arial'; ctx.fillText('Skor: '+score, W/2, H/2 + 24);
+    ctx.font='14px Arial'; ctx.fillText('Ketuk untuk bermain lagi', W/2, H/2 + 48);
+  }
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+loop();
+
+function startGame(){ playing = true; document.getElementById('menu').style.display='none'; music.play(); }
+function endGame(){ gameOver=true; }
+function restart(){ score=0; frame=0; gameOver=false; bullets=[]; enemies=[]; powerups=[]; ship.x=W/2; ship.power=1; }
+
+// ======== INPUT =========
+document.getElementById('startBtn').onclick = startGame;
+
+cv.addEventListener('mousedown', ()=>{ if(gameOver){ restart(); return;} shoot(); });
+cv.addEventListener('touchstart', ()=>{ if(gameOver){ restart(); return;} shoot(); });
+
+window.addEventListener('keydown', e=>{
+  if(e.code==='ArrowLeft') ship.x -= ship.speed;
+  if(e.code==='ArrowRight') ship.x += ship.speed;
+  if(e.code==='Space') shoot();
+  if(gameOver && e.code==='Enter') restart();
+});
+
+cv.addEventListener('mousemove', e=>{ ship.x = e.offsetX; });
+cv.addEventListener('touchmove', e=>{ ship.x = e.touches[0].clientX / (window.innerWidth/W); });
+
+</script>
+</body>
+</html>
